@@ -17,6 +17,7 @@ package com.intellij.aspect.tools.ccdb;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
@@ -50,7 +51,12 @@ public final class ClangdGenerator {
     String invocationDirectory = System.getenv("BUILD_WORKING_DIRECTORY");
     Path base = Path.of(invocationDirectory == null ? "" : invocationDirectory).toAbsolutePath();
     try {
-      List<Path> outputs = generate(List.of(args), base);
+      List<Path> outputs;
+      if (args.length > 0 && args[0].equals("--bazel-runfiles")) {
+        outputs = BazelConfigGenerator.generate(List.of(args).subList(1, args.length));
+      } else {
+        outputs = generate(List.of(args), base);
+      }
       for (Path output : outputs) {
         System.out.println("Generated " + output);
       }
@@ -93,8 +99,7 @@ public final class ClangdGenerator {
     return List.copyOf(outputs.keySet());
   }
 
-  private static Set<String> readSources(
-      Path database, Path folder, Map<Path, Path> owners) throws IOException {
+  static JsonArray readDatabase(Path database) throws IOException {
     JsonElement root;
     try (var reader = Files.newBufferedReader(database)) {
       root = JSON.fromJson(reader, JsonElement.class);
@@ -104,9 +109,19 @@ public final class ClangdGenerator {
     if (root == null || !root.isJsonArray()) {
       throw new IllegalArgumentException("Expected a JSON array in " + database);
     }
+    return root.getAsJsonArray();
+  }
+
+  private static Set<String> readSources(
+      Path database, Path folder, Map<Path, Path> owners) throws IOException {
+    return readSources(readDatabase(database), database, folder, owners);
+  }
+
+  static Set<String> readSources(
+      JsonArray commands, Path database, Path folder, Map<Path, Path> owners) {
     Set<String> sources = new TreeSet<>();
     int index = 0;
-    for (JsonElement element : root.getAsJsonArray()) {
+    for (JsonElement element : commands) {
       String context = database + " entry " + index++;
       if (!element.isJsonObject()) {
         throw new IllegalArgumentException("Expected an object in " + context);
@@ -129,7 +144,7 @@ public final class ClangdGenerator {
     return sources;
   }
 
-  private static String stringField(JsonObject object, String field, String context) {
+  static String stringField(JsonObject object, String field, String context) {
     JsonElement value = object.get(field);
     if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()
         || value.getAsString().isEmpty()) {
@@ -138,7 +153,7 @@ public final class ClangdGenerator {
     return value.getAsString();
   }
 
-  private static String render(Path folder, Map<Path, Set<String>> targets) {
+  static String render(Path folder, Map<Path, Set<String>> targets) {
     StringBuilder yaml = new StringBuilder(HEADER);
     boolean first = true;
     for (var target : targets.entrySet()) {

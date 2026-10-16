@@ -101,3 +101,60 @@ the tool does not create symlinks or wipe directories.
 Use `--help` for usage. Invalid input exits with status 1. To edit original
 sources while retaining a mirror, configure clangd with
 `--path-mappings=/absolute/project=/absolute/compdb`.
+
+## Bazel run
+
+```starlark
+load("//tools/ccdb:ccdb.bzl", "ccdb")
+
+ccdb(
+    name = "clangd_configs",
+    deps = ["//app:main", "//lib:core"],
+)
+```
+
+Run the generator explicitly:
+
+```sh
+bazel run //:clangd_configs
+# Included example:
+bazel run //tools/ccdb:abseil
+```
+
+`ccdb` is a macro around `java_binary`. A collection-only helper applies the
+IntelliJ aspect to `deps` and collects every transitive `intellij-compilecommands`
+output. The Java executable receives these database runfile paths through its
+`args`, using `--bazel-runfiles`. Empty dependency graphs are a successful no-op.
+
+Generation happens during `bazel run`, outside the build action sandbox. A build
+alone prepares the executable and databases; it does not generate `.clangd`
+files. There is no generator action or manifest, and the configs are not declared
+Bazel outputs.
+
+The tool resolves database runfile symlinks and writes one `.clangd` beside each
+group of target database directories, for example:
+
+```text
+bazel-out/<configuration>/bin/app/
+  .clangd
+  main/compile_commands.json
+  helper/compile_commands.json
+```
+
+External repositories stay under `bin/external/<repo>/`, and configurations remain
+separate. Database references are relative (`main`, `helper`); source matches are
+relative to the original source package, using the execroot recorded in the
+commands. Original source packages are not modified. Configs under `bazel-out`
+need a matching source layout or path mapping for clangd to discover and apply
+them. Copying a config elsewhere also requires adjusting its relative database
+references.
+
+Rerun with all dependencies for each package to refresh its mapping. Shared sources
+assigned to different target databases in the same package/configuration are
+rejected as ambiguous. The standalone CLI and response-file support are unchanged.
+
+Run the unit and integration tests with:
+
+```sh
+bazel test //tools/ccdb:generator_test //tools/ccdb:run_test
+```

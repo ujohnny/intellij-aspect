@@ -96,7 +96,7 @@ def _compilecommands(target, ctx, attr):
     template = ctx.actions.declare_file(target.label.name + ".compile_commands.json.tpl")
     ctx.actions.write(template, json.encode(commands))
 
-    file = ctx.actions.declare_file(target.label.name + ".compile_commands.json")
+    file = ctx.actions.declare_file(target.label.name + "/compile_commands.json")
     ctx.actions.run_shell(
         inputs = [template],
         outputs = [file],
