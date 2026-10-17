@@ -25,8 +25,8 @@ kt_jvm_library(
     deps = [
         ":fixture_java_proto",
         "//sdk/lib:deploy",
-        "@maven//:com_google_truth_truth",
-        "@maven//:junit_junit",
+        "@intellij_aspect_sdk_maven//:com_google_truth_truth",
+        "@intellij_aspect_sdk_maven//:junit_junit",
         "@protobuf//:protobuf_java",
         "@rules_java//java/runfiles",
     ],

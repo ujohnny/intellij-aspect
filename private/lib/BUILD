@@ -41,7 +41,7 @@ kt_jvm_library(
         ":tee",
         ":zip",
         "//sdk/lib:deploy",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
     ],
 )
 
@@ -53,7 +53,7 @@ kt_jvm_library(
 kt_jvm_library(
     name = "bep",
     srcs = ["bep.kt"],
-    deps = ["@maven//:com_fasterxml_jackson_core_jackson_databind"],
+    deps = ["@intellij_aspect_sdk_maven//:com_fasterxml_jackson_core_jackson_databind"],
 )
 
 kt_jvm_library(

@@ -31,6 +31,7 @@ register_toolchains("//tools/kotlin:toolchain")
 
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
+    name = "intellij_aspect_sdk_maven",
     artifacts = [
         "junit:junit:4.13.2",
         "com.google.truth:truth:1.4.5",
@@ -49,7 +50,7 @@ maven.install(
     ],
     lock_file = "//:maven_install.json",
 )
-use_repo(maven, "maven")
+use_repo(maven, "intellij_aspect_sdk_maven")
 
 bazel_registry = use_extension("//private:extension.bzl", "bazel_registry")
 bazel_registry.bazelisk(version = "1.25.0")

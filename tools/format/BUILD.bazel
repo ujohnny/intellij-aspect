@@ -6,7 +6,7 @@ package(default_visibility = ["//visibility:public"])
 java_binary(
     name = "ktlint",
     main_class = "com.pinterest.ktlint.Main",
-    runtime_deps = ["@maven//:com_pinterest_ktlint_ktlint_cli"],
+    runtime_deps = ["@intellij_aspect_sdk_maven//:com_pinterest_ktlint_ktlint_cli"],
 )
 
 format_multirun(

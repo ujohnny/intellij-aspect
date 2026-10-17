@@ -25,8 +25,8 @@ intellij_aspect_test(
     name = "aspect_test",
     deps = [
         "//sdk",
-        "@maven//:com_google_guava_guava",
-        "@maven//:com_google_truth_truth",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@intellij_aspect_sdk_maven//:com_google_guava_guava",
+        "@intellij_aspect_sdk_maven//:com_google_truth_truth",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
     ],
 )

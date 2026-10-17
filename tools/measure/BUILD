@@ -33,8 +33,8 @@ kt_jvm_library(
         "//sdk/lib:deploy",
         "//tools/lib:cli",
         "//tools/lib:runfiles_repo",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_cli_jvm",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_cli_jvm",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
         "@protobuf//:protobuf_java",
     ],
 )
@@ -56,7 +56,7 @@ kt_jvm_library(
     visibility = ["//visibility:private"],
     deps = [
         ":report_java_proto",
-        "@maven//:com_google_code_gson_gson",
+        "@intellij_aspect_sdk_maven//:com_google_code_gson_gson",
         "@protobuf//:protobuf_java",
     ],
 )

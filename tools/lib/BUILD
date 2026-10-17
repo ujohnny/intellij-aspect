@@ -14,6 +14,6 @@ kt_jvm_library(
     visibility = ["//tools:__subpackages__"],
     deps = [
         "//sdk/lib:deploy",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_cli_jvm",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_cli_jvm",
     ],
 )

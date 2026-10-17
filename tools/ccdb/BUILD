@@ -11,7 +11,7 @@ java_library(
     visibility = ["//visibility:public"],
     deps = [
         "//tools/lib:runfiles_repo",
-        "@maven//:com_google_code_gson_gson",
+        "@intellij_aspect_sdk_maven//:com_google_code_gson_gson",
     ],
 )
 
@@ -29,8 +29,8 @@ java_test(
     test_class = "com.intellij.aspect.tools.ccdb.ClangdGeneratorTest",
     deps = [
         ":generator",
-        "@maven//:com_google_code_gson_gson",
-        "@maven//:junit_junit",
+        "@intellij_aspect_sdk_maven//:com_google_code_gson_gson",
+        "@intellij_aspect_sdk_maven//:junit_junit",
     ],
 )
 
@@ -51,8 +51,8 @@ java_test(
     test_class = "com.intellij.aspect.tools.ccdb.CompileCommandsRuleTest",
     deps = [
         "//tools/lib:runfiles_repo",
-        "@maven//:com_google_code_gson_gson",
-        "@maven//:junit_junit",
+        "@intellij_aspect_sdk_maven//:com_google_code_gson_gson",
+        "@intellij_aspect_sdk_maven//:junit_junit",
     ],
 )
 
@@ -64,7 +64,7 @@ ccdb(
 java_library(
     name = "merger",
     srcs = ["CompileCommandsMerger.java"],
-    deps = ["@maven//:com_google_code_gson_gson"],
+    deps = ["@intellij_aspect_sdk_maven//:com_google_code_gson_gson"],
 )
 
 java_binary(
@@ -81,8 +81,8 @@ java_test(
     test_class = "com.intellij.aspect.tools.ccdb.CompileCommandsMergerTest",
     deps = [
         ":merger",
-        "@maven//:com_google_code_gson_gson",
-        "@maven//:junit_junit",
+        "@intellij_aspect_sdk_maven//:com_google_code_gson_gson",
+        "@intellij_aspect_sdk_maven//:junit_junit",
     ],
 )
 
@@ -113,7 +113,7 @@ java_test(
     test_class = "com.intellij.aspect.tools.ccdb.ClangdRuleTest",
     deps = [
         "//tools/lib:runfiles_repo",
-        "@maven//:com_google_code_gson_gson",
-        "@maven//:junit_junit",
+        "@intellij_aspect_sdk_maven//:com_google_code_gson_gson",
+        "@intellij_aspect_sdk_maven//:junit_junit",
     ],
 )

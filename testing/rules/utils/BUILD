@@ -13,7 +13,7 @@ kt_jvm_library(
         "//private/lib:path",
         "//sdk/proto:ide_info_java_proto",
         "//testing/rules/fixture:fixture_lib",
-        "@maven//:com_google_truth_truth",
-        "@maven//:junit_junit",
+        "@intellij_aspect_sdk_maven//:com_google_truth_truth",
+        "@intellij_aspect_sdk_maven//:junit_junit",
     ],
 )

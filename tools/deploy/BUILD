@@ -9,7 +9,7 @@ kt_jvm_library(
         "//sdk/lib:deploy",
         "//tools/lib:cli",
         "//tools/lib:runfiles_repo",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_cli_jvm",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_cli_jvm",
     ],
 )
 

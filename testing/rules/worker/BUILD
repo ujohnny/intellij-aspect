@@ -34,7 +34,7 @@ kt_jvm_library(
         "//private/lib:zip",
         "//sdk/lib:deploy",
         "//testing/rules/fixture:fixture_java_proto",
-        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+        "@intellij_aspect_sdk_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
     ],
 )
 
