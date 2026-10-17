@@ -35,6 +35,7 @@ _IntelliJRunInfo = _create_module_provider()
 _IntelliJTestInfo = _create_module_provider()
 _IntelliJCcInfo = _create_module_provider()
 _IntelliJCompileCommandsInfo = _create_module_provider()
+_IntelliJAppleSupportInfo = _create_module_provider()
 _IntellijForeignCcInfo = _create_module_provider()
 _IntelliJCcToolchainInfo = _create_module_provider()
 _IntelliJXcodeInfo = _create_module_provider()
@@ -58,6 +59,7 @@ _ORDERED = [
     _IntelliJXcodeInfo,
     _IntelliJCcToolchainInfo,
     _IntelliJCcInfo,
+    _IntelliJAppleSupportInfo,
     _IntelliJCompileCommandsInfo,
     _IntellijForeignCcInfo,
     _IntelliJJavaToolchainInfo,
@@ -89,6 +91,7 @@ intellij_provider = struct(
     TestInfo = _IntelliJTestInfo,
     CcInfo = _IntelliJCcInfo,
     CompileCommandsInfo = _IntelliJCompileCommandsInfo,
+    AppleSupportInfo = _IntelliJAppleSupportInfo,
     ForeignCcInfo = _IntellijForeignCcInfo,
     CcToolchainInfo = _IntelliJCcToolchainInfo,
     XcodeInfo = _IntelliJXcodeInfo,

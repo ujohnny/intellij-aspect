@@ -12,17 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Runs the clangd generator explicitly over transitive C++ aspect outputs."""
+"""Collects compilation databases and merges them with local toolchain paths."""
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_java//java:defs.bzl", "java_binary")
 load("//intellij:aspect.bzl", "intellij_configure_aspect")
+load("//modules:apple_support.bzl", apple_support_info = "module")
 load("//modules:cc_info.bzl", cc_info = "module")
 load("//modules:cc_toolchain_info.bzl", cc_toolchain_info = "module")
 load("//modules:compilecommands.bzl", "OUTPUT_GROUP", compilecommands_info = "module")
 
 compilecommands_aspect = intellij_configure_aspect(
-    modules = [cc_info, cc_toolchain_info, compilecommands_info],
+    modules = [cc_info, cc_toolchain_info, apple_support_info, compilecommands_info],
     container = Label("//:module_container"),
 )
 
@@ -77,3 +78,44 @@ def ccdb(name, deps, **kwargs):
         args = ["--bazel-runfiles", "$(CCDB_DATABASES)"],
         **kwargs
     )
+
+def _ccdb_new_impl(ctx):
+    inputs = depset(transitive = [
+        getattr(dep[OutputGroupInfo], OUTPUT_GROUP, depset())
+        for dep in ctx.attr.deps
+        if OutputGroupInfo in dep
+    ])
+    output = ctx.actions.declare_file(ctx.label.name + "/compile_commands.json")
+    args = ctx.actions.args()
+    args.add(output)
+    args.add_all(inputs)
+    args.use_param_file("@%s", use_always = True)
+    args.set_param_file_format("multiline")
+    ctx.actions.run(
+        executable = ctx.executable._merger,
+        arguments = [args],
+        inputs = inputs,
+        outputs = [output],
+        mnemonic = "IntelliJCompileCommandsMerge",
+        progress_message = "Merging compile commands for %{label}",
+        # The process working directory is the actual local execroot. Do not
+        # reuse absolute paths from another workspace or remote executor.
+        execution_requirements = {"local": "1", "no-cache": "1"},
+    )
+    return [DefaultInfo(files = depset([output]), runfiles = ctx.runfiles(files = [output]))]
+
+ccdb_new = rule(
+    implementation = _ccdb_new_impl,
+    doc = "Merges transitive compile commands and resolves execroot and Apple placeholders.",
+    attrs = {
+        "deps": attr.label_list(
+            mandatory = True,
+            aspects = [compilecommands_aspect],
+        ),
+        "_merger": attr.label(
+            default = Label("//tools/ccdb:merge"),
+            executable = True,
+            cfg = "exec",
+        ),
+    },
+)

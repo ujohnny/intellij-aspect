@@ -44,6 +44,7 @@ def _define(
         aspect,
         rulesets = None,
         fragments = None,
+        aspect_attrs = None,
         toolchains = None,
         direct_toolchain_deps_do_not_use = None,
         aspect_providers = None):
@@ -53,6 +54,7 @@ def _define(
         aspect = aspect,
         rulesets = rulesets or [],
         fragments = fragments or [],
+        aspect_attrs = aspect_attrs or {},
         toolchains = toolchains or [],
         direct_toolchain_deps_do_not_use = direct_toolchain_deps_do_not_use or [],
         aspect_providers = aspect_providers or [],

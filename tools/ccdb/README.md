@@ -102,59 +102,64 @@ Use `--help` for usage. Invalid input exits with status 1. To edit original
 sources while retaining a mirror, configure clangd with
 `--path-mappings=/absolute/project=/absolute/compdb`.
 
-## Bazel run
+## Legacy Bazel macro
+
+The old `ccdb` macro is retained as a prototype, but no longer resolves aspect
+placeholders. Use `ccdb_new` below for Bazel-generated compilation databases.
+The standalone `.clangd` CLI above still accepts already resolved databases.
+
+## Merged compilation database: ccdb_new
 
 ```starlark
-load("//tools/ccdb:ccdb.bzl", "ccdb")
+load("//tools/ccdb:ccdb.bzl", "ccdb_new")
 
-ccdb(
-    name = "clangd_configs",
+ccdb_new(
+    name = "compilation_database",
     deps = ["//app:main", "//lib:core"],
 )
 ```
 
-Run the generator explicitly:
-
 ```sh
-bazel run //:clangd_configs
+bazel build //:compilation_database
+# Output: bazel-bin/compilation_database/compile_commands.json
 # Included example:
-bazel run //tools/ccdb:abseil
+bazel build //tools/ccdb:abseil_new
 ```
 
-`ccdb` is a macro around `java_binary`. A collection-only helper applies the
-IntelliJ aspect to `deps` and collects every transitive `intellij-compilecommands`
-output. The Java executable receives these database runfile paths through its
-`args`, using `--bazel-runfiles`. Empty dependency graphs are a successful no-op.
+`ccdb_new` applies the IntelliJ aspect to `deps`, collects the transitive
+`intellij-compilecommands` output group, and runs a Java merger as a build action.
+`DefaultInfo.files` contains exactly one merged `compile_commands.json`. An empty
+or headers-only graph produces `[]`. Shared input files are included once; distinct
+compile commands for the same source are preserved. Inputs are sorted by path for
+stable ordering.
 
-Generation happens during `bazel run`, outside the build action sandbox. A build
-alone prepares the executable and databases; it does not generate `.clangd`
-files. There is no generator action or manifest, and the configs are not declared
-Bazel outputs.
+The aspect writes each target's database as `compile_commands_<target-name>.json`
+in its package's output directory, without shell processing. This avoids collisions
+with executable outputs named after the target. On Apple target
+platforms, the separate `modules/apple_support.bzl` module runs
+`apple_support.run_shell` on the resolved C++ toolchain and contributes a
+`<toolchain>.apple_support.txt` to the same output group. This UTF-8 file contains
+exactly two lines: `DEVELOPER_DIR` and `SDKROOT`. Non-Apple toolchains contribute no
+Apple file.
 
-The tool resolves database runfile symlinks and writes one `.clangd` beside each
-group of target database directories, for example:
+Intermediate command entries carry an optional `_apple_support` filename linking
+them to their own toolchain's data. The merger removes this private field and
+replaces `{EXECROOT}`, `__BAZEL_EXECUTION_ROOT__`,
+`__BAZEL_EXECUTION_ROOT_CANONICAL__`, `__BAZEL_XCODE_DEVELOPER_DIR__`, and
+`__BAZEL_XCODE_SDKROOT__` in JSON string values. Different toolchains can therefore
+use different SDKs in one database. Missing Apple data is an error; JSON escaping
+is preserved when paths contain spaces, quotes, or backslashes.
 
-```text
-bazel-out/<configuration>/bin/app/
-  .clangd
-  main/compile_commands.json
-  helper/compile_commands.json
-```
+Both environment discovery and merging run locally without cached action results,
+so IDE paths refer to the current machine and execroot. This requires a local
+Apple execution environment when generating commands for Apple targets. The rule
+does not compile the C++ targets or materialize their generated source files.
 
-External repositories stay under `bin/external/<repo>/`, and configurations remain
-separate. Database references are relative (`main`, `helper`); source matches are
-relative to the original source package, using the execroot recorded in the
-commands. Original source packages are not modified. Configs under `bazel-out`
-need a matching source layout or path mapping for clangd to discover and apply
-them. Copying a config elsewhere also requires adjusting its relative database
-references.
-
-Rerun with all dependencies for each package to refresh its mapping. Shared sources
-assigned to different target databases in the same package/configuration are
-rejected as ambiguous. The standalone CLI and response-file support are unchanged.
-
-Run the unit and integration tests with:
+The Java entry point is `//tools/ccdb:merge` (Java 21, Gson). It accepts the output
+path followed by all database and Apple-data paths, or one `@params` argument with
+one literal path per line. Relative paths and `_apple_support` references are
+relative to its working directory, which is the execroot in the Bazel action.
 
 ```sh
-bazel test //tools/ccdb:generator_test //tools/ccdb:run_test
+bazel test //tools/ccdb:merger_test //tools/ccdb:rule_test //tools/ccdb:generator_test
 ```

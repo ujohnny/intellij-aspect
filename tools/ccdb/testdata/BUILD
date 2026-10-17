@@ -1,5 +1,5 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//tools/ccdb:ccdb.bzl", "ccdb")
+load("//tools/ccdb:ccdb.bzl", "ccdb", "ccdb_new")
 
 package(default_testonly = True)
 
@@ -30,6 +30,21 @@ ccdb(
 
 ccdb(
     name = "empty_configs",
+    visibility = ["//tools/ccdb:__pkg__"],
+    deps = [":headers_only"],
+)
+
+ccdb_new(
+    name = "merged",
+    visibility = ["//tools/ccdb:__pkg__"],
+    deps = [
+        ":alpha",
+        ":beta",
+    ],
+)
+
+ccdb_new(
+    name = "empty_merged",
     visibility = ["//tools/ccdb:__pkg__"],
     deps = [":headers_only"],
 )

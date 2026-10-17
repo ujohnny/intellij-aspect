@@ -1,10 +1,6 @@
-load("@rules_cc//cc:defs.bzl", "CcInfo", "cc_common")
+load("@rules_cc//cc:defs.bzl", "CcInfo")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "CC_TOOLCHAIN_TYPE")
-load("//common:artifact_location.bzl", "artifact_location")
 load("//common:common.bzl", "intellij_common")
-load("//common:dependencies.bzl", "intellij_deps")
-load("//common:make_variables.bzl", "expand_make_variables")
-load("//common:output_groups.bzl", "intellij_output_groups")
 load("//common:provider.bzl", "intellij_provider")
 load(":module.bzl", "intellij_module")
 
@@ -20,7 +16,7 @@ def _lookup_list(info, name):
     """Since we trim providers we need getattr for lookups."""
     return getattr(info, name, [])
 
-def _compilecommands_entry(c_arguments, cpp_arguments, info, file):
+def _compilecommands_entry(c_arguments, cpp_arguments, info, file, apple_paths):
     is_cpp = file.extension in CPP_EXTENSION
 
     rule_ctx = info.rule_context
@@ -44,10 +40,13 @@ def _compilecommands_entry(c_arguments, cpp_arguments, info, file):
 
     arguments.extend(["-c", file.path])
 
-    return struct(
+    return intellij_common.struct(
         directory = EXECROOT_PLACEHOLDER,
         arguments = arguments,
         file = file.path,
+        # Private input metadata, removed by the merger. Bind each command to
+        # its toolchain so split configurations can use different Apple SDKs.
+        _apple_support = apple_paths.path if apple_paths else None,
     )
 
 def _find_toolchain_info(ctx):
@@ -71,6 +70,8 @@ def _compilecommands(target, ctx, attr):
         return None
 
     target_info = target_result.value
+    toolchains = ctx.rule.toolchains
+    apple_paths = intellij_module.lookup_target(toolchains[CC_TOOLCHAIN_TYPE], intellij_provider.AppleSupportInfo)
 
     c_arguments = [toolchain_info.c_compiler] + toolchain_info.c_option
     cpp_arguments = [toolchain_info.cpp_compiler] + toolchain_info.cpp_option
@@ -84,7 +85,7 @@ def _compilecommands(target, ctx, attr):
         cpp_arguments.append("--sysroot=%s" % toolchain_info.sysroot)
 
     commands = [
-        _compilecommands_entry(c_arguments, cpp_arguments, target_info, file)
+        _compilecommands_entry(c_arguments, cpp_arguments, target_info, file, apple_paths)
         for src in intellij_common.attr_as_label_list(ctx, "srcs")
         for file in src.files.to_list()
         if file.extension in CPP_EXTENSION + C_EXTENSION
@@ -93,20 +94,8 @@ def _compilecommands(target, ctx, attr):
     if not commands:
         return None
 
-    template = ctx.actions.declare_file(target.label.name + ".compile_commands.json.tpl")
-    ctx.actions.write(template, json.encode(commands))
-
-    file = ctx.actions.declare_file(target.label.name + "/compile_commands.json")
-    ctx.actions.run_shell(
-        inputs = [template],
-        outputs = [file],
-        command = 'sed "s|%s|$PWD|g" "$1" > "$2"' % EXECROOT_PLACEHOLDER,
-        arguments = [template.path, file.path],
-        mnemonic = "IntelliJCompileCommands",
-        progress_message = "Expanding compile commands for %{label}",
-        # the action has to run directly in the execroot
-        execution_requirements = {"local": "1"},
-    )
+    file = ctx.actions.declare_file("compile_commands_" + target.label.name + ".json")
+    ctx.actions.write(file, json.encode(commands))
 
     return intellij_module.result(None, outputs = {OUTPUT_GROUP: depset([file])})
 
