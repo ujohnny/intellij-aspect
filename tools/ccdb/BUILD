@@ -1,5 +1,6 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
 load(":ccdb.bzl", "ccdb", "ccdb_clangd", "ccdb_new")
+load(":java_tool.bzl", "java21_tool")
 
 java_library(
     name = "generator",
@@ -68,10 +69,15 @@ java_library(
 )
 
 java_binary(
-    name = "merge",
+    name = "merge_binary",
     main_class = "com.intellij.aspect.tools.ccdb.CompileCommandsMerger",
-    visibility = ["//visibility:public"],
     runtime_deps = [":merger"],
+)
+
+java21_tool(
+    name = "merge",
+    binary = ":merge_binary",
+    visibility = ["//visibility:public"],
 )
 
 java_test(
