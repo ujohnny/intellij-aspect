@@ -159,4 +159,37 @@ public class CompileCommandsMergerTest {
     assertEquals("-isysroot=/SDKs/Mac OS.sdk",
         result().get(0).getAsJsonObject().getAsJsonArray("arguments").get(1).getAsString());
   }
+
+  @Test public void buildActionWritesClangdAlongsideResolvedDatabase() throws Exception {
+    Path database = database("a", "a.cc", "-isysroot=__BAZEL_XCODE_SDKROOT__");
+    Path apple = file("mac.apple_support.txt", "/Xcode\n/SDKs/Mac OS.sdk\n");
+    Path manifest = file("apple support.json",
+        new Gson().toJson(Map.of(database.toString(), apple.toString())));
+    Path merged = file("nested/db \"quoted\"/compile_commands.json", "previous database");
+    Path config = file("nested/.clangd", "previous config");
+    Path params = file("clangd.params",
+        "--clangd\n" + config + "\n" + merged + "\n" + manifest + "\n"
+            + database + "\n" + apple + "\n");
+    CompileCommandsMerger.main(new String[] {"@" + params});
+    String yaml = Files.readString(config);
+    String reference = yaml.lines().filter(line -> line.startsWith("  CompilationDatabase: "))
+        .findFirst().orElseThrow().substring("  CompilationDatabase: ".length());
+    assertEquals(merged.getParent(), config.getParent().resolve(
+        JsonParser.parseString(reference).getAsString()));
+    var command = JsonParser.parseString(Files.readString(merged)).getAsJsonArray()
+        .get(0).getAsJsonObject();
+    assertEquals("-isysroot=/SDKs/Mac OS.sdk", command.getAsJsonArray("arguments").get(1).getAsString());
+    assertEquals(Path.of("").toRealPath().toString(), command.get("directory").getAsString());
+  }
+
+  @Test public void emptyBuildActionReplacesStaleConfigAndDatabase() throws Exception {
+    Path config = file(".clangd", "previous config");
+    Path manifest = file("apple_support.json", "{}");
+    Files.writeString(output(), "previous database");
+    CompileCommandsMerger.main(new String[] {
+        "--clangd", config.toString(), output().toString(), manifest.toString()});
+    assertTrue(result().isEmpty());
+    assertTrue(Files.readString(config).contains("CompilationDatabase: \".\""));
+    assertFalse(Files.readString(config).contains("previous config"));
+  }
 }

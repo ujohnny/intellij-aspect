@@ -1,4 +1,63 @@
-# ccdb: standalone .clangd generator
+# ccdb: compilation databases and .clangd
+
+## Package-local build rule: ccdb_clangd
+
+Define one `ccdb_clangd` in each package that needs a config, listing that package's
+C++ targets. Private targets are accessible from the rule in their own package.
+
+```starlark
+load("//tools/ccdb:ccdb.bzl", "ccdb_clangd")
+
+ccdb_clangd(
+    name = "clangd",
+    deps = [":main", ":private_library"],
+)
+```
+
+```sh
+bazel build //app:clangd //lib:clangd
+# Included example:
+bazel build //tools/ccdb:abseil_clangd
+```
+
+The rule extends `ccdb_new`'s merge pipeline. A single Java execution action resolves
+execroot and Apple toolchain placeholders and writes two declared build outputs:
+
+```text
+bazel-bin/app/
+  .clangd
+  clangd/compile_commands.json
+```
+
+The config selects the merged database for the package, including headers:
+
+```yaml
+CompileFlags:
+  CompilationDatabase: "clangd"
+```
+
+`CompilationDatabase` is relative to `.clangd`, as specified by the
+[clangd configuration reference](https://clangd.llvm.org/config#compilationdatabase).
+The merged database contains commands from `deps` and their transitive dependencies,
+with the same deduplication, placeholder handling, and local execution requirements
+as `ccdb_new`. Empty or headers-only graphs produce `[]` and a valid config.
+`DefaultInfo.files` and runfiles include both outputs.
+
+Only the rule's own package receives a `.clangd`; dependency packages need their
+own rule if they also need a config. Define at most one `ccdb_clangd` per package,
+since all instances would own the same `.clangd` output. Private C++ targets do not
+need broader visibility. `bazel build` creates both files without a `bazel run` step
+or undeclared writes into other packages.
+
+Configs live in the build output tree. Clangd must see them in a corresponding
+source mirror or through your existing path-mapping setup; this rule does not install
+configs into source directories or materialize generated sources.
+
+```sh
+bazel test //tools/ccdb:clangd_rule_test //tools/ccdb:merger_test
+```
+
+## Standalone .clangd generator
 
 Java 21, built with the repository's existing Bazel toolchain. Takes paths to existing `compile_commands.json` files
 and generates one `.clangd` in the parent of their target directories:
@@ -105,7 +164,8 @@ sources while retaining a mirror, configure clangd with
 ## Legacy Bazel macro
 
 The old `ccdb` macro is retained as a prototype, but no longer resolves aspect
-placeholders. Use `ccdb_new` below for Bazel-generated compilation databases.
+placeholders. Use `ccdb_clangd` above for build-time configs or `ccdb_new` below for
+a merged database alone.
 The standalone `.clangd` CLI above still accepts already resolved databases.
 
 ## Merged compilation database: ccdb_new
@@ -160,7 +220,8 @@ so IDE paths refer to the current machine and execroot. This requires a local
 Apple execution environment when generating commands for Apple targets. The rule
 does not compile the C++ targets or materialize their generated source files.
 
-The Java entry point is `//tools/ccdb:merge` (Java 21, Gson). It accepts the output
+The Java entry point is `//tools/ccdb:merge` (Java 21, Gson). It accepts an optional
+`--clangd <config-output>` prefix (used by `ccdb_clangd`), followed by the database output
 path, the Apple support manifest, then all database and Apple-data paths, or one
 `@params` argument with one literal path per line. Relative paths in the manifest are
 relative to its working directory, which is the execroot in the Bazel action.

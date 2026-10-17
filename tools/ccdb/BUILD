@@ -1,5 +1,5 @@
 load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_test")
-load(":ccdb.bzl", "ccdb", "ccdb_new")
+load(":ccdb.bzl", "ccdb", "ccdb_clangd", "ccdb_new")
 
 java_library(
     name = "generator",
@@ -89,4 +89,31 @@ java_test(
 ccdb_new(
     name = "abseil_new",
     deps = ["@abseil-cpp//absl/time:time"],
+)
+
+ccdb_clangd(
+    name = "abseil_clangd",
+    deps = ["@abseil-cpp//absl/time:time"],
+)
+
+java_test(
+    name = "clangd_rule_test",
+    size = "small",
+    srcs = ["ClangdRuleTest.java"],
+    data = [
+        "//tools/ccdb/testdata:clangd",
+        "//tools/ccdb/testdata/empty:clangd",
+        "//tools/ccdb/testdata/sub:clangd",
+    ],
+    jvm_flags = [
+        "-Dccdb.configs='$(rootpaths //tools/ccdb/testdata:clangd)'",
+        "-Dccdb.empty_configs='$(rootpaths //tools/ccdb/testdata/empty:clangd)'",
+        "-Dccdb.private_configs='$(rootpaths //tools/ccdb/testdata/sub:clangd)'",
+    ],
+    test_class = "com.intellij.aspect.tools.ccdb.ClangdRuleTest",
+    deps = [
+        "//tools/lib:runfiles_repo",
+        "@maven//:com_google_code_gson_gson",
+        "@maven//:junit_junit",
+    ],
 )

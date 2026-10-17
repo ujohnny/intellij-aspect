@@ -81,7 +81,7 @@ def ccdb(name, deps, **kwargs):
         **kwargs
     )
 
-def _ccdb_new_impl(ctx):
+def _merge_compile_commands(ctx, clangd = None):
     bindings = []
     for dep in ctx.attr.deps:
         info = intellij_module.lookup_target(dep, intellij_provider.CompileCommandsInfo)
@@ -100,7 +100,11 @@ def _ccdb_new_impl(ctx):
         for group in [OUTPUT_GROUP, APPLE_OUTPUT_GROUP]
     ])
     output = ctx.actions.declare_file(ctx.label.name + "/compile_commands.json")
+    outputs = [output] + ([clangd] if clangd else [])
     args = ctx.actions.args()
+    if clangd:
+        args.add("--clangd")
+        args.add(clangd)
     args.add(output)
     args.add(manifest)
     args.add_all(inputs)
@@ -110,19 +114,24 @@ def _ccdb_new_impl(ctx):
         executable = ctx.executable._merger,
         arguments = [args],
         inputs = depset([manifest], transitive = [inputs]),
-        outputs = [output],
+        outputs = outputs,
         mnemonic = "IntelliJCompileCommandsMerge",
         progress_message = "Merging compile commands for %{label}",
         # The process working directory is the actual local execroot. Do not
         # reuse absolute paths from another workspace or remote executor.
         execution_requirements = {"local": "1", "no-cache": "1"},
     )
-    return [DefaultInfo(files = depset([output]), runfiles = ctx.runfiles(files = [output]))]
+    return [DefaultInfo(files = depset(outputs), runfiles = ctx.runfiles(files = outputs))]
 
-ccdb_new = rule(
-    implementation = _ccdb_new_impl,
-    doc = "Merges transitive compile commands and resolves execroot and Apple placeholders.",
-    attrs = {
+def _ccdb_new_impl(ctx):
+    return _merge_compile_commands(ctx)
+
+def _ccdb_clangd_impl(ctx):
+    # Each package owns its config; never write into a dependency's package.
+    return _merge_compile_commands(ctx, clangd = ctx.actions.declare_file(".clangd"))
+
+def _ccdb_attrs():
+    return {
         "deps": attr.label_list(
             mandatory = True,
             aspects = [compilecommands_aspect],
@@ -132,5 +141,16 @@ ccdb_new = rule(
             executable = True,
             cfg = "exec",
         ),
-    },
+    }
+
+ccdb_new = rule(
+    implementation = _ccdb_new_impl,
+    doc = "Merges transitive compile commands and resolves execroot and Apple placeholders.",
+    attrs = _ccdb_attrs(),
+)
+
+ccdb_clangd = rule(
+    implementation = _ccdb_clangd_impl,
+    doc = "Builds a package-local .clangd and merged database. Define at most once per package.",
+    attrs = _ccdb_attrs(),
 )
