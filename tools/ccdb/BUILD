@@ -39,10 +39,12 @@ java_test(
     size = "small",
     srcs = ["CompileCommandsRuleTest.java"],
     data = [
+        "//tools/ccdb/testdata:configs_compile_commands",
         "//tools/ccdb/testdata:empty_merged",
         "//tools/ccdb/testdata:merged",
     ],
     jvm_flags = [
+        "-Dccdb.databases='$(rootpaths //tools/ccdb/testdata:configs_compile_commands)'",
         "-Dccdb.merged=$(rootpath //tools/ccdb/testdata:merged)",
         "-Dccdb.empty=$(rootpath //tools/ccdb/testdata:empty_merged)",
     ],

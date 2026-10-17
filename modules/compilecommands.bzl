@@ -16,7 +16,7 @@ def _lookup_list(info, name):
     """Since we trim providers we need getattr for lookups."""
     return getattr(info, name, [])
 
-def _compilecommands_entry(c_arguments, cpp_arguments, info, file, apple_paths):
+def _compilecommands_entry(c_arguments, cpp_arguments, info, file):
     is_cpp = file.extension in CPP_EXTENSION
 
     rule_ctx = info.rule_context
@@ -44,9 +44,6 @@ def _compilecommands_entry(c_arguments, cpp_arguments, info, file, apple_paths):
         directory = EXECROOT_PLACEHOLDER,
         arguments = arguments,
         file = file.path,
-        # Private input metadata, removed by the merger. Bind each command to
-        # its toolchain so split configurations can use different Apple SDKs.
-        _apple_support = apple_paths.path if apple_paths else None,
     )
 
 def _find_toolchain_info(ctx):
@@ -57,7 +54,8 @@ def _find_toolchain_info(ctx):
     if not toolchains or CC_TOOLCHAIN_TYPE not in toolchains:
         return None
 
-    return intellij_module.lookup_target(toolchains[CC_TOOLCHAIN_TYPE], intellij_provider.CompileCommandsInfo)
+    info = intellij_module.lookup_target(toolchains[CC_TOOLCHAIN_TYPE], intellij_provider.CompileCommandsInfo)
+    return info.toolchain if info else None
 
 def _compilecommands(target, ctx, attr):
     """Creates the commpile commands json file and writes it."""
@@ -85,7 +83,7 @@ def _compilecommands(target, ctx, attr):
         cpp_arguments.append("--sysroot=%s" % toolchain_info.sysroot)
 
     commands = [
-        _compilecommands_entry(c_arguments, cpp_arguments, target_info, file, apple_paths)
+        _compilecommands_entry(c_arguments, cpp_arguments, target_info, file)
         for src in intellij_common.attr_as_label_list(ctx, "srcs")
         for file in src.files.to_list()
         if file.extension in CPP_EXTENSION + C_EXTENSION
@@ -97,23 +95,26 @@ def _compilecommands(target, ctx, attr):
     file = ctx.actions.declare_file("compile_commands_" + target.label.name + ".json")
     ctx.actions.write(file, json.encode(commands))
 
-    return intellij_module.result(None, outputs = {OUTPUT_GROUP: depset([file])})
-
-def _forward_toolchain(target, ctx, attr):
-    """Forward the toolchain info so it can be querried later."""
-    toolchain_result = intellij_module.lookup_self(attr, intellij_provider.CcToolchainInfo)
-    if not toolchain_result:
-        return None
-
-    return intellij_module.result(None, cross_target_internal_value = toolchain_result.value)
+    return struct(database = file, apple_paths = apple_paths)
 
 def _implementation(target, ctx, attr):
-    forward = _forward_toolchain(target, ctx, attr)
+    transitive = []
+    for name in dir(ctx.rule.attr):
+        for dep in intellij_common.attr_as_label_list(ctx, name):
+            info = intellij_module.lookup_target(dep, intellij_provider.CompileCommandsInfo)
+            if info:
+                transitive.append(info.databases)
 
-    if forward:
-        return forward
-    else:
-        return _compilecommands(target, ctx, attr)
+    toolchain = intellij_module.lookup_self(attr, intellij_provider.CcToolchainInfo)
+    database = None if toolchain else _compilecommands(target, ctx, attr)
+    return intellij_module.result(
+        None,
+        cross_target_internal_value = struct(
+            toolchain = toolchain.value if toolchain else None,
+            databases = depset([database] if database else [], transitive = transitive),
+        ),
+        outputs = {OUTPUT_GROUP: depset([database.database])} if database else {},
+    )
 
 _aspect = intellij_module.aspect(
     provider = intellij_provider.CompileCommandsInfo,

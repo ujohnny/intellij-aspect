@@ -38,7 +38,6 @@ public final class CompileCommandsMerger {
   private static final String EXECROOT = "{EXECROOT}";
   private static final String DEVELOPER_DIR = "__BAZEL_XCODE_DEVELOPER_DIR__";
   private static final String SDKROOT = "__BAZEL_XCODE_SDKROOT__";
-  private static final String APPLE_METADATA = "_apple_support";
 
   private CompileCommandsMerger() {}
 
@@ -47,12 +46,14 @@ public final class CompileCommandsMerger {
       // Bazel's multiline parameter file: one literal argument per line, no shell quoting.
       List<String> arguments = args.length == 1 && args[0].startsWith("@")
           ? Files.readAllLines(Path.of(args[0].substring(1))) : List.of(args);
-      if (arguments.isEmpty()) {
+      if (arguments.size() < 2) {
         throw new IllegalArgumentException(
-            "Usage: merge <output> [compile_commands_<target-name>.json | *.apple_support.txt ...]");
+            "Usage: merge <output> <apple-support-map.json> "
+                + "[compile_commands_<target-name>.json | *.apple_support.txt ...]");
       }
       merge(Path.of(arguments.getFirst()),
-          arguments.subList(1, arguments.size()).stream().map(Path::of).toList(),
+          arguments.subList(2, arguments.size()).stream().map(Path::of).toList(),
+          readAppleBindings(Path.of(arguments.get(1))),
           Path.of("").toRealPath());
     } catch (IOException | IllegalArgumentException | JsonParseException error) {
       System.err.println("ccdb_new: " + error.getMessage());
@@ -60,7 +61,24 @@ public final class CompileCommandsMerger {
     }
   }
 
-  static void merge(Path output, List<Path> inputs, Path execroot) throws IOException {
+  private static Map<Path, Path> readAppleBindings(Path manifest) throws IOException {
+    JsonElement root;
+    try (var reader = Files.newBufferedReader(manifest)) {
+      root = JSON.fromJson(reader, JsonElement.class);
+    }
+    if (root == null || !root.isJsonObject()) {
+      throw new IllegalArgumentException("Expected an Apple support mapping in " + manifest);
+    }
+    Map<Path, Path> bindings = new HashMap<>();
+    for (var entry : root.getAsJsonObject().entrySet()) {
+      bindings.put(Path.of(entry.getKey()).normalize(),
+          Path.of(string(entry.getValue(), manifest)).normalize());
+    }
+    return bindings;
+  }
+
+  static void merge(Path output, List<Path> inputs, Map<Path, Path> appleBindings, Path execroot)
+      throws IOException {
     if (!execroot.isAbsolute()) {
       throw new IllegalArgumentException("Expected an absolute execroot: " + execroot);
     }
@@ -94,16 +112,15 @@ public final class CompileCommandsMerger {
         if (!entry.isJsonObject()) {
           throw new IllegalArgumentException("Expected a compile command object in " + database);
         }
-        JsonObject command = entry.getAsJsonObject();
         List<String> paths = null;
-        JsonElement apple = command.remove(APPLE_METADATA);
+        Path apple = appleBindings.get(database);
         if (apple != null) {
-          paths = applePaths.get(Path.of(string(apple, database)).normalize());
+          paths = applePaths.get(apple);
           if (paths == null) {
             throw new IllegalArgumentException("Missing Apple paths " + apple + " for " + database);
           }
         }
-        merged.add(expand(command, execroot.toString(), paths, database));
+        merged.add(expand(entry, execroot.toString(), paths, database));
       }
     }
     // Parse and expand everything before touching the output.

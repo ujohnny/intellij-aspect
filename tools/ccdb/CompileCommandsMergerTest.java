@@ -27,6 +27,7 @@ import com.google.gson.JsonParser;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -48,7 +49,7 @@ public class CompileCommandsMergerTest {
     return temporary.getRoot().toPath().resolve("exec root \"quoted\" \\ $&");
   }
 
-  private Path database(String target, Path apple, String source, String flag) throws Exception {
+  private Path database(String target, String source, String flag) throws Exception {
     JsonObject entry = new JsonObject();
     entry.addProperty("directory", "{EXECROOT}");
     entry.addProperty("file", source);
@@ -58,9 +59,6 @@ public class CompileCommandsMergerTest {
     arguments.add("-c");
     arguments.add(source);
     entry.add("arguments", arguments);
-    if (apple != null) {
-      entry.addProperty("_apple_support", apple.toString());
-    }
     JsonArray entries = new JsonArray();
     entries.add(entry);
     return file("compile_commands_" + target + ".json", new Gson().toJson(entries));
@@ -71,15 +69,15 @@ public class CompileCommandsMergerTest {
   }
 
   @Test public void mergesDeterministicallyAndDeduplicatesInputFiles() throws Exception {
-    Path first = database("a", null, "same.cc", "-DONE");
-    Path second = database("b", null, "same.cc", "-DTWO");
-    CompileCommandsMerger.merge(output(), List.of(second, first, first), execroot());
+    Path first = database("a", "same.cc", "-DONE");
+    Path second = database("b", "same.cc", "-DTWO");
+    CompileCommandsMerger.merge(output(), List.of(second, first, first), Map.of(), execroot());
     JsonArray entries = result();
     assertEquals(2, entries.size()); // Preserve different commands for the same source.
     assertEquals("-DONE", entries.get(0).getAsJsonObject().getAsJsonArray("arguments").get(1).getAsString());
     assertEquals(execroot().toString(), entries.get(0).getAsJsonObject().get("directory").getAsString());
     String original = Files.readString(output());
-    CompileCommandsMerger.merge(output(), List.of(first, second), execroot());
+    CompileCommandsMerger.merge(output(), List.of(first, second), Map.of(), execroot());
     assertEquals(original, Files.readString(output()));
   }
 
@@ -87,10 +85,10 @@ public class CompileCommandsMergerTest {
     String developer = execroot().resolve("Xcode.app/Contents/Developer").toString();
     Path mac = file("mac.apple_support.txt", developer + "\n/SDKs/Mac OS.sdk\n");
     Path ios = file("ios.apple_support.txt", "/Xcode-iOS\n/SDKs/iPhone.sdk\n");
-    Path first = database("a", mac, "a.cc",
+    Path first = database("a", "a.cc",
         "__BAZEL_XCODE_DEVELOPER_DIR__/usr/bin:__BAZEL_XCODE_SDKROOT__");
-    Path second = database("b", ios, "b.cc", "-isysroot=__BAZEL_XCODE_SDKROOT__");
-    CompileCommandsMerger.merge(output(), List.of(first, second, mac, ios), execroot());
+    Path second = database("b", "b.cc", "-isysroot=__BAZEL_XCODE_SDKROOT__");
+    CompileCommandsMerger.merge(output(), List.of(first, second, mac, ios), Map.of(first, mac, second, ios), execroot());
     JsonArray entries = result();
     assertEquals(developer + "/usr/bin:/SDKs/Mac OS.sdk",
         entries.get(0).getAsJsonObject().getAsJsonArray("arguments").get(1).getAsString());
@@ -107,7 +105,7 @@ public class CompileCommandsMergerTest {
     entry.addProperty("command", "clang -fdebug-prefix-map=__BAZEL_EXECUTION_ROOT__=. "
         + "-I__BAZEL_EXECUTION_ROOT_CANONICAL__/include");
     Path database = file("compile_commands_a.json", "[" + entry + "]");
-    CompileCommandsMerger.merge(output(), List.of(database), execroot());
+    CompileCommandsMerger.merge(output(), List.of(database), Map.of(), execroot());
     JsonObject command = result().get(0).getAsJsonObject();
     assertEquals(execroot() + "/a.cc", command.get("file").getAsString());
     assertEquals(execroot() + "/a.o", command.get("output").getAsString());
@@ -116,43 +114,49 @@ public class CompileCommandsMergerTest {
   }
 
   @Test public void acceptsEmptyAndNonAppleGraphs() throws Exception {
-    CompileCommandsMerger.merge(output(), List.of(), execroot());
+    CompileCommandsMerger.merge(output(), List.of(), Map.of(), execroot());
     assertTrue(result().isEmpty());
     Path empty = file("compile_commands_empty.json", "[]");
-    CompileCommandsMerger.merge(output(), List.of(empty), execroot());
+    CompileCommandsMerger.merge(output(), List.of(empty), Map.of(), execroot());
     assertTrue(result().isEmpty());
   }
 
   @Test public void rejectsMissingAppleDataBeforeOverwritingOutput() throws Exception {
     Path apple = file("mac.apple_support.txt", "/Xcode\n/SDK\n");
-    Path database = database("a", apple, "a.cc", "__BAZEL_XCODE_SDKROOT__");
+    Path database = database("a", "a.cc", "__BAZEL_XCODE_SDKROOT__");
     Files.writeString(output(), "previous output");
     var error = assertThrows(IllegalArgumentException.class,
-        () -> CompileCommandsMerger.merge(output(), List.of(database), execroot()));
+        () -> CompileCommandsMerger.merge(output(), List.of(database), Map.of(database, apple), execroot()));
     assertTrue(error.getMessage().contains("Missing Apple paths"));
     assertEquals("previous output", Files.readString(output()));
-    Path unbound = database("b", null, "b.cc", "__BAZEL_XCODE_SDKROOT__");
+    Path unbound = database("b", "b.cc", "__BAZEL_XCODE_SDKROOT__");
     assertThrows(IllegalArgumentException.class,
-        () -> CompileCommandsMerger.merge(output(), List.of(unbound, apple), execroot()));
+        () -> CompileCommandsMerger.merge(output(), List.of(unbound, apple), Map.of(), execroot()));
   }
 
   @Test public void rejectsMalformedInputs() throws Exception {
     for (String content : List.of("{}", "[1]", "null")) {
       Path malformed = file("compile_commands_bad.json", content);
       assertThrows(IllegalArgumentException.class,
-          () -> CompileCommandsMerger.merge(output(), List.of(malformed), execroot()));
+          () -> CompileCommandsMerger.merge(output(), List.of(malformed), Map.of(), execroot()));
     }
     Path badApple = file("bad.apple_support.txt", "/Xcode\nrelative-sdk\n");
     assertThrows(IllegalArgumentException.class,
-        () -> CompileCommandsMerger.merge(output(), List.of(badApple), execroot()));
+        () -> CompileCommandsMerger.merge(output(), List.of(badApple), Map.of(), execroot()));
   }
 
   @Test public void readsMultilineParameterFilesWithLiteralSpaces() throws Exception {
-    Path database = database("target with spaces", null, "a.cc", "-DTEST");
-    Path params = file("arguments.params", output() + "\n" + database + "\n");
+    Path database = database("target with spaces", "a.cc", "-isysroot=__BAZEL_XCODE_SDKROOT__");
+    Path apple = file("mac paths.apple_support.txt", "/Xcode\n/SDKs/Mac OS.sdk\n");
+    Path manifest = file("apple support.json",
+        new Gson().toJson(Map.of(database.toString(), apple.toString())));
+    Path params = file("arguments.params",
+        output() + "\n" + manifest + "\n" + database + "\n" + apple + "\n");
     CompileCommandsMerger.main(new String[] {"@" + params});
     assertEquals(1, result().size());
     assertEquals(Path.of("").toRealPath().toString(),
         result().get(0).getAsJsonObject().get("directory").getAsString());
+    assertEquals("-isysroot=/SDKs/Mac OS.sdk",
+        result().get(0).getAsJsonObject().getAsJsonArray("arguments").get(1).getAsString());
   }
 }

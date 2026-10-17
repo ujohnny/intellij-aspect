@@ -138,13 +138,18 @@ in its package's output directory, without shell processing. This avoids collisi
 with executable outputs named after the target. On Apple target
 platforms, the separate `modules/apple_support.bzl` module runs
 `apple_support.run_shell` on the resolved C++ toolchain and contributes a
-`<toolchain>.apple_support.txt` to the same output group. This UTF-8 file contains
+`<toolchain>.apple_support.txt` to the separate `intellij-apple-support` output group.
+This UTF-8 file contains
 exactly two lines: `DEVELOPER_DIR` and `SDKROOT`. Non-Apple toolchains contribute no
 Apple file.
 
-Intermediate command entries carry an optional `_apple_support` filename linking
-them to their own toolchain's data. The merger removes this private field and
-replaces `{EXECROOT}`, `__BAZEL_EXECUTION_ROOT__`,
+The aspect forwards each database's toolchain association through its provider.
+The rule collects these associations from `deps` and writes one `apple_support.json`
+manifest mapping database paths to Apple-data paths. It passes the manifest and both
+output groups to the merger as separate inputs. Intermediate command entries contain
+only `directory`, `file`, and `arguments`.
+
+The merger uses the manifest to replace `{EXECROOT}`, `__BAZEL_EXECUTION_ROOT__`,
 `__BAZEL_EXECUTION_ROOT_CANONICAL__`, `__BAZEL_XCODE_DEVELOPER_DIR__`, and
 `__BAZEL_XCODE_SDKROOT__` in JSON string values. Different toolchains can therefore
 use different SDKs in one database. Missing Apple data is an error; JSON escaping
@@ -156,8 +161,8 @@ Apple execution environment when generating commands for Apple targets. The rule
 does not compile the C++ targets or materialize their generated source files.
 
 The Java entry point is `//tools/ccdb:merge` (Java 21, Gson). It accepts the output
-path followed by all database and Apple-data paths, or one `@params` argument with
-one literal path per line. Relative paths and `_apple_support` references are
+path, the Apple support manifest, then all database and Apple-data paths, or one
+`@params` argument with one literal path per line. Relative paths in the manifest are
 relative to its working directory, which is the execroot in the Bazel action.
 
 ```sh

@@ -19,8 +19,9 @@ load("@apple_support//lib:xcode_support.bzl", "xcode_support")
 load("@rules_cc//cc:defs.bzl", "cc_common")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "CC_TOOLCHAIN_TYPE")
 load("//common:provider.bzl", "intellij_provider")
-load(":compilecommands.bzl", "OUTPUT_GROUP")
 load(":module.bzl", "intellij_module")
+
+OUTPUT_GROUP = "intellij-apple-support"
 
 def _implementation(target, ctx, attr):
     if cc_common.CcToolchainInfo not in target:

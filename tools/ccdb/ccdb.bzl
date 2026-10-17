@@ -16,11 +16,13 @@
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_java//java:defs.bzl", "java_binary")
+load("//common:provider.bzl", "intellij_provider")
 load("//intellij:aspect.bzl", "intellij_configure_aspect")
-load("//modules:apple_support.bzl", apple_support_info = "module")
+load("//modules:apple_support.bzl", APPLE_OUTPUT_GROUP = "OUTPUT_GROUP", apple_support_info = "module")
 load("//modules:cc_info.bzl", cc_info = "module")
 load("//modules:cc_toolchain_info.bzl", cc_toolchain_info = "module")
 load("//modules:compilecommands.bzl", "OUTPUT_GROUP", compilecommands_info = "module")
+load("//modules:module.bzl", "intellij_module")
 
 compilecommands_aspect = intellij_configure_aspect(
     modules = [cc_info, cc_toolchain_info, apple_support_info, compilecommands_info],
@@ -80,21 +82,34 @@ def ccdb(name, deps, **kwargs):
     )
 
 def _ccdb_new_impl(ctx):
+    bindings = []
+    for dep in ctx.attr.deps:
+        info = intellij_module.lookup_target(dep, intellij_provider.CompileCommandsInfo)
+        if info:
+            bindings.append(info.databases)
+    manifest = ctx.actions.declare_file(ctx.label.name + "/apple_support.json")
+    ctx.actions.write(manifest, json.encode({
+        entry.database.path: entry.apple_paths.path
+        for entry in depset(transitive = bindings).to_list()
+        if entry.apple_paths
+    }))
     inputs = depset(transitive = [
-        getattr(dep[OutputGroupInfo], OUTPUT_GROUP, depset())
+        getattr(dep[OutputGroupInfo], group, depset())
         for dep in ctx.attr.deps
         if OutputGroupInfo in dep
+        for group in [OUTPUT_GROUP, APPLE_OUTPUT_GROUP]
     ])
     output = ctx.actions.declare_file(ctx.label.name + "/compile_commands.json")
     args = ctx.actions.args()
     args.add(output)
+    args.add(manifest)
     args.add_all(inputs)
     args.use_param_file("@%s", use_always = True)
     args.set_param_file_format("multiline")
     ctx.actions.run(
         executable = ctx.executable._merger,
         arguments = [args],
-        inputs = inputs,
+        inputs = depset([manifest], transitive = [inputs]),
         outputs = [output],
         mnemonic = "IntelliJCompileCommandsMerge",
         progress_message = "Merging compile commands for %{label}",

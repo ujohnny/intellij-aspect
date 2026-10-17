@@ -29,6 +29,18 @@ import java.util.Set;
 import org.junit.Test;
 
 public class CompileCommandsRuleTest {
+  @Test public void intermediateDatabasesContainOnlyCompileCommands() throws Exception {
+    String[] paths = System.getProperty("ccdb.databases").split(" ");
+    assertEquals(3, paths.length);
+    for (String path : paths) {
+      assertTrue(Path.of(path).getFileName().toString().startsWith("compile_commands_"));
+      String text = Files.readString(RunfilesRepo.location(path));
+      for (var entry : JsonParser.parseString(text).getAsJsonArray()) {
+        assertEquals(Set.of("directory", "file", "arguments"), entry.getAsJsonObject().keySet());
+      }
+    }
+  }
+
   @Test public void mergesDirectAndTransitiveCommandsWithResolvedPaths() throws Exception {
     String text = Files.readString(RunfilesRepo.location(System.getProperty("ccdb.merged")));
     JsonArray commands = JsonParser.parseString(text).getAsJsonArray();
